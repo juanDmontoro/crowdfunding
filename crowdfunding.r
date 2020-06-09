@@ -14,17 +14,17 @@ webpage <- read_html("https://www.kickstarter.com/discover/categories/music")
 results <- webpage%>% html_nodes(".grid-col-4-lg")
 results[[1]] # promete
 item <- results[[1]]  
-
+item
 # La estrategia habitual de limpiar el markup code para dejar solo texto NO FUNCIONA
 html_text(results,trim=T) 
 
 # Veamos con un análisis más detallado 
 results %>%str # results es una lista 
 length(results) # con 12 elementos
-results[[4]] # llamada a uno de los elementos
-results[[4]] %>% str # la estructura es la de xml_node que se puede analizar usando las utilidades de la libreria xml2
+results[[1]] # llamada a uno de los elementos
+results[[1]] %>% str # la estructura es la de xml_node que se puede analizar usando las utilidades de la libreria xml2
 
-item <- results[[4]]
+item <- results[[1]]
 item
 xml_attrs(item) # attributos del objeto
 xml_attr(item,"id") # devuelve el valor del atributo id
@@ -46,7 +46,7 @@ str_replace_all(proyecto, "[\" { }]", " ") %>% #limpieza de comillas y llaves
 # el resultado es un vector con cadenas de 110 elementos 
 
 # guardamos el resultado
-proyecto_4 <- str_replace_all(proyecto, "[\" { }]", " ") %>%
+proyecto_limpio <- str_replace_all(proyecto, "[\" { }]", " ") %>%
   str_replace_all(" :", ": ") %>%
   str_split(": ",simplify=T) 
 
@@ -56,7 +56,7 @@ str_replace(gsub("\\s+", " ", str_trim(proyecto)), "B", "b")%>%
   str_replace_all(" :", ": ")
 
 # PROCEDIMIENTO DEFINITIVO
-proyecto_4 <- str_split(proyecto, boundary("word")) # esto!!!! 
+proyecto_limpio <- str_split(proyecto, boundary("word")) # esto!!!! 
 # codigos a buscar: 
 # id(*), name(*), goal, pledged, currency, deadline, state_changed_at, created_at
 # launched_at, staff_pick, is_starrable, backers_count, static_usd_rate
@@ -66,33 +66,96 @@ proyecto_4 <- str_split(proyecto, boundary("word")) # esto!!!!
 
 # estrategia: función que toma una cadena, la busca en el vector y devuelve elitem a continuación
 
-proyecto_4 <- unlist(proyecto_4) # convertimos en unb array simple
+proyecto_limpio <- unlist(proyecto_limpio) # convertimos en unb array simple
 
-match("project_id",proyecto_4) # devuelve la posición
-match("project_id",proyecto_4) # devuelve la posición -> problema: hay 4 pero solo devuelve el primero
-"id" %in% proyecto_4 # indica si hay elemento "id"
+match("project_id",proyecto_limpio) # devuelve la posición
+match("project_id",proyecto_limpio) # devuelve la posición -> problema: hay 4 pero solo devuelve el primero
+"id" %in% proyecto_limpio # indica si hay elemento "id"
 
 #opción DF
 #convirtiendo el vector en DF se puede identificar claramente 
 # la ubicación de los contenidos que nos interesan
-data.table::shift(proyecto_4,n = -1) # deplaza los elementos de un vector  hacia atrás
+data.table::shift(proyecto_limpio,n = -1) # deplaza los elementos de un vector  hacia atrás
 
-df <- tibble(code=proyecto_4,
-             content=data.table::shift(proyecto_4,n = -1),
-             i=seq_along(proyecto_4))
+df <- tibble(code=proyecto_limpio,
+             content=data.table::shift(proyecto_limpio,n = -1),
+             i=seq_along(proyecto_limpio))
 df%>% filter(code=="id")
 df%>% filter(code=="project_id")
 df%>% filter(code=="launched_at")
 
-# CVOMPLETAR FUNCION PARA DEVOLVER DE UN PROYECTO EL CONTENIDO INTERESANTE! 
-
-return_the_value <- function(vector,cadena){
-  
-}
+# Automatizacion del procesamiento de datos -------------------------------
 
 
 
+# Secuencia a seguir:
+# 1. Obtener results: lista con n items (como conseguir más de 12?)
+# 2. Acceder secuencialmente a cada item:
+#   2.1 xml_attr(item,"id") # devuelve el valor del atributo id
+#   2.2 xml_attr(item,"data-ref") # devuelve el valor del atributo id
+#   2.3 xml_attr(item,"data-project") # contiene los valores relevantes del proyecto de crowdfunding
+# 3. Limpieza y extracción de los valores relevantes de "data-project"
+# 4. Devolver un DF!
 
+
+# para ello creamos doas funciones
+# FUNCION_1: toma un ITEM de la lista que devuelve la página web y lo procesa (obtiene los 
+#            campos); devuelve fila
+# FUNCION_2: toma la lista completa e itera llamando para cada i a la FUNCION_1; 
+#            superpone las filas obtenidas en un solo DF
+
+
+df%>%filter(code=="project_id")%>% select(content)%>%as.numeric()
+df%>%filter(code=="name")%>% select(content)
+df%>%filter(code=="staff_pick")%>%select("content")
+df%>%filter(code=="staff_pick")%>% select(content)=="true"
+df[which(df$code=="staff_pick"),2] # alternative way
+df%>%filter(code=="state")%>%select("content")
+df%>%filter(code=="backers_count")%>%select("content")
+
+
+
+funcion_1 <- function(item_de_lista){
+  proyecto <- xml_attr(item,"data-project") %>%
+    str_split( boundary("word")) %>% unlist
+  proyecto <- tibble(
+    code=proyecto,
+    content=data.table::shift(proyecto,n = -1))
+  mydf <- tibble(title = xml_attr(item_de_lista,"id"),
+  data_ref = xml_attr(item,"data-ref"),
+  project_id = df%>%filter(code=="project_id")%>% select(content),
+  project_goal= df%>%filter(code=="goal")%>% select(content),
+  project_pledged=  df%>%filter(code=="pledged")%>% select(content),
+  project_currency=  df%>%filter(code=="currency")%>% select(content),
+  project_currency_rate=  df%>%filter(code=="static_usd_rate")%>% select(content),
+  project_usd_pledged=  df%>%filter(code=="usd_pledged")%>% select(content),
+  project_deadline = df%>%filter(code=="deadline")%>% select(content),
+  project_created_at= df%>%filter(code=="created_at")%>% select(content),
+  project_launched_at=  df%>%filter(code=="launched_at")%>% select(content),
+  project_state_changed_at= df%>%filter(code=="state_changed_at")%>% select(content),
+  project_staff_pick = df%>%filter(code=="staff_pick")%>% select(content)=="true",
+  project_is_starrable=  df%>%filter(code=="is_starrable")%>% select(content)=="true",
+  project_percent = df%>%filter(code=="percent_funded")%>% select(content),
+  project_backers_count= df%>%filter(code=="backers_count")%>% select(content))
+    # codigos con respuesta multiple 
+    # id(*), name(*), state(*), 
+    # se podría intentar concatenando las diferenctes salidas en una sola cadena
+    # algo así
+    # df%>%filter(code=="state")%>%select("content")%>% unlist %>%
+    # stringi::stri_join_list(rel, sep="", collapse =NULL)
+    #pero por alguna razón falla!
+  return mydf
+  }
+
+paste("a","B","C")
+paste(rel)
+rel <- paste0(rel)
+rel%>% str
+rel[[3]]
+resultados <- stringi::stri_join_list(rel, sep="", collapse =NULL)
+resultados
+rel <- df%>%filter(code=="state")%>%select("content")%>% unlist
+paste0(rel)
 # Failed attempts ---------------------------------------------------------
 
 # ulule: no luck
