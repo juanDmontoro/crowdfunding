@@ -121,7 +121,7 @@ funcion_1 <- function(item_de_lista){
   proyecto <- tibble(
     code=proyecto,
     content=data.table::shift(proyecto,n = -1))
-  mydf <- tibble(title = xml_attr(item_de_lista,"id"),
+  mydf <- tibble(data_title = xml_attr(item_de_lista,"id"),
   data_ref = xml_attr(item,"data-ref"),
   project_id = df%>%filter(code=="project_id")%>% select(content),
   project_goal= df%>%filter(code=="goal")%>% select(content),
